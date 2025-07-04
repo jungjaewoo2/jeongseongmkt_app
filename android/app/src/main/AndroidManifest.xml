@@ -41,6 +41,30 @@
                 <data android:scheme="https" />
                 <data android:host="jeongseongmkt.com" />
             </intent-filter>
+            
+            <!-- 카카오톡 OAuth 리다이렉션 처리 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kakao" />
+            </intent-filter>
+            
+            <!-- 네이버 OAuth 리다이렉션 처리 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="naver" />
+            </intent-filter>
+            
+            <!-- 구글 OAuth 리다이렉션 처리 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.googleusercontent.apps" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
