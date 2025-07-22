@@ -106,8 +106,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
               _checkLoginCompletion(url);
             }
           },
+
           onNavigationRequest: (NavigationRequest request) {
             debugPrint('네비게이션 요청: ${request.url}');
+
+            // 마이페이지로의 이동은 항상 허용
+            if (_isMyPage(request.url)) {
+              debugPrint('마이페이지로 이동 허용: ${request.url}');
+              return NavigationDecision.navigate;
+            }
 
             // 로그아웃 처리
             if (_isLogoutPage(request.url)) {
@@ -431,7 +438,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
-  // URL 변경 감지 및 처리
+  // 4. _handleUrlChange 메서드 수정
   void _handleUrlChange(String url) {
     if (lastUrl != url) {
       lastUrl = url;
@@ -443,15 +450,24 @@ class _WebViewScreenState extends State<WebViewScreen> {
         return;
       }
 
-      // 마이페이지 처리 (메인페이지로 리다이렉션하지 않음)
+      // 마이페이지 처리를 가장 먼저 수행
       if (_isMyPage(url)) {
         debugPrint('마이페이지로 이동: $url');
-        // 마이페이지로 이동할 때는 리다이렉션 방지
+        // 마이페이지로 이동할 때는 모든 플래그 초기화
         isRedirecting = false;
         isLoginInProgress = false;
         isOAuthInProgress = false;
         loginCheckTimer?.cancel();
-        return;
+
+        // 마이페이지 이동 메시지
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('마이페이지로 이동했습니다.'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return; // 중요: 여기서 반드시 return
       }
 
       // 로그아웃 처리
@@ -472,7 +488,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
       }
 
       // 로그인 완료 후 메인페이지로 강제 이동
-      if (_isLoginSuccess(url)) {
+      // 단, 마이페이지가 아닌 경우에만
+      if (_isLoginSuccess(url) && !_isMyPage(url)) {
         _redirectToMainPage();
       }
 
@@ -485,14 +502,31 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   // 마이페이지 URL 감지
   bool _isMyPage(String url) {
-    return url.contains('/profile') ||
-        url.contains('/mypage') ||
-        url.contains('/my-page') ||
-        url.contains('/account') ||
-        url.contains('/user') ||
-        url.contains('profile') && url.contains('jeongseongmkt.com') ||
-        url.contains('mypage') && url.contains('jeongseongmkt.com') ||
-        url.contains('account') && url.contains('jeongseongmkt.com');
+    // URL을 소문자로 변환하여 대소문자 구분 없이 체크
+    final lowerUrl = url.toLowerCase();
+
+    return lowerUrl.contains('/profile') ||
+        lowerUrl.contains('/mypage') ||
+        lowerUrl.contains('/my-page') ||
+        lowerUrl.contains('/my_page') ||
+        lowerUrl.contains('/account') ||
+        lowerUrl.contains('/user') ||
+        lowerUrl.contains('/member') ||
+        lowerUrl.contains('/me') ||
+        lowerUrl.contains('profile') &&
+            lowerUrl.contains('jeongseongmkt.com') ||
+        lowerUrl.contains('mypage') && lowerUrl.contains('jeongseongmkt.com') ||
+        lowerUrl.contains('account') &&
+            lowerUrl.contains('jeongseongmkt.com') ||
+        lowerUrl.contains('member') && lowerUrl.contains('jeongseongmkt.com') ||
+        // 추가 패턴들
+        lowerUrl.contains('dashboard') && lowerUrl.contains('user') ||
+        lowerUrl.contains('settings') &&
+            lowerUrl.contains('jeongseongmkt.com') ||
+        lowerUrl.contains('my-account') ||
+        lowerUrl.contains('my_account') ||
+        lowerUrl.contains('개인정보') ||
+        lowerUrl.contains('회원정보');
   }
 
   // 로그인 리다이렉션 감지 (더 포괄적으로)
@@ -510,8 +544,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
         url.contains('signup');
   }
 
-  // 로그인 성공 감지 (더 정확하게)
+  // 2. _isLoginSuccess 메서드 수정 - 마이페이지 체크를 먼저 수행
   bool _isLoginSuccess(String url) {
+    // 마이페이지라면 로그인 성공으로 간주하지 않음
+    if (_isMyPage(url)) {
+      return false;
+    }
+
     // 로그인 페이지는 제외
     if (_isLoginPage(url)) {
       return false;
@@ -542,27 +581,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
       return true;
     }
 
-    return url.contains('success') ||
-        url.contains('main') ||
-        url.contains('dashboard') ||
-        url.contains('home') ||
-        url.contains('welcome') ||
-        url.contains('complete') ||
+    // 특정 키워드가 포함된 경우만 성공으로 간주
+    if (url.contains('success') ||
         url.contains('token') ||
         url.contains('access') ||
         url.contains('authorized') ||
-        url.contains('verified') ||
-        // account는 제거 (마이페이지 이동 시 메인으로 리다이렉션 방지)
-        // 메인페이지 도메인으로 돌아온 경우 (로그인 페이지 제외)
-        (url.contains('jeongseongmkt.com') &&
-            !url.contains('login') &&
-            !url.contains('signin') &&
-            !url.contains('signup') &&
-            !url.contains('auth') &&
-            !url.contains('callback') &&
-            !url.contains('profile') && // 마이페이지 제외
-            !url.contains('mypage') && // 마이페이지 제외
-            !url.contains('account')); // 계정 페이지 제외
+        url.contains('verified')) {
+      return true;
+    }
+
+    // jeongseongmkt.com 도메인이지만 로그인/마이페이지가 아닌 경우
+    // 더 엄격한 조건 추가
+    if (url.contains('jeongseongmkt.com') &&
+        !url.contains('login') &&
+        !url.contains('signin') &&
+        !url.contains('signup') &&
+        !url.contains('auth') &&
+        !url.contains('callback') &&
+        !_isMyPage(url)) {
+      // 로그인 직후에만 true 반환하도록 수정
+      return isLoginInProgress || isOAuthInProgress;
+    }
+
+    return false;
   }
 
   // 로그인 실패 감지 (더 포괄적으로)
@@ -1020,6 +1061,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
     });
     retryCount = 0;
     controller.loadRequest(Uri.parse('http://jeongseongmkt.com/logout'));
+  }
+
+  void _debugPrintUrlInfo(String url) {
+    debugPrint('=== URL 정보 ===');
+    debugPrint('URL: $url');
+    debugPrint('마이페이지인가? ${_isMyPage(url)}');
+    debugPrint('로그인 성공인가? ${_isLoginSuccess(url)}');
+    debugPrint('로그인 페이지인가? ${_isLoginPage(url)}');
+    debugPrint('로그인 진행 중? $isLoginInProgress');
+    debugPrint('OAuth 진행 중? $isOAuthInProgress');
+    debugPrint('리다이렉션 중? $isRedirecting');
+    debugPrint('================');
   }
 
   @override
